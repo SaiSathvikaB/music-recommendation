@@ -1,0 +1,75 @@
+import pandas as pd
+import nltk
+import pickle
+import faiss
+import numpy as np
+
+from nltk.stem.porter import PorterStemmer
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+# Load Dataset
+df = pd.read_csv("spotify_millsongdata.csv")
+
+df = df.drop('link', axis=1).reset_index(drop=True)
+
+# Text Cleaning
+df['text'] = (
+    df['text']
+    .str.lower()
+    .replace(r'^\w\s', ' ', regex=True)
+    .replace(r'\n', ' ', regex=True)
+)
+
+# Tokenization + Stemming
+nltk.download('punkt')
+
+stemmer = PorterStemmer()
+
+def tokenization(txt):
+
+    tokens = nltk.word_tokenize(txt)
+
+    stemming = [
+        stemmer.stem(word)
+        for word in tokens
+    ]
+
+    return " ".join(stemming)
+
+df['text'] = df['text'].apply(tokenization)
+
+# TF-IDF
+tfidf = TfidfVectorizer(
+    analyzer='word',
+    stop_words='english'
+)
+
+matrix = tfidf.fit_transform(df['text'])
+
+# Convert to dense vectors
+vectors = matrix.toarray().astype('float32')
+
+# Normalize
+faiss.normalize_L2(vectors)
+
+# Create FAISS Index
+dimension = vectors.shape[1]
+
+index = faiss.IndexFlatIP(dimension)
+
+# Store vectors
+index.add(vectors)
+
+# Save FAISS index
+faiss.write_index(
+    index,
+    "songs.faiss"
+)
+
+# Save dataframe
+pickle.dump(
+    df,
+    open("df.pkl","wb")
+)
+
+print("Training Complete")
