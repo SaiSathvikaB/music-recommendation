@@ -1,7 +1,10 @@
 import pickle
+import faiss
 import streamlit as st
-import spotipy 
+import spotipy
+
 from spotipy.oauth2 import SpotifyClientCredentials
+
 
 CLIENT_ID = "e86e12d60b1e44cb977b42e8e6829661"
 CLIENT_SECRET = "3fbd79b30ae249758d24f34983b770ec"
@@ -24,31 +27,72 @@ def get_song_album_cover_url(song_name, artist_name):
     else:
         # Handle the case when no track is found
         return "https://i.postimg.cc/0QNxYz4V/social.png", None
-
-
+    song_to_index = {
+    song: idx
+    for idx, song in enumerate(music['song'])
+}
 def recommend(song):
-    index = music[music['song'] == song].index[0]
-    distances = sorted(list(enumerate(similarity[index])), reverse=True, key=lambda x: x[1])
+
+    idx = song_to_index[song]
+
+    query_vector = faiss_index.reconstruct(idx)
+
+    query_vector = query_vector.reshape(1,-1)
+
+    k = 6
+
+    similarities, indices = faiss_index.search(
+        query_vector,
+        k
+    )
+
     recommended_music_names = []
     recommended_music_posters = []
-    recommended_music_links = []  # New list to store song links
-    for i in distances[1:6]:
-        # Fetch the artist and song details
-        artist = music.iloc[i[0]].artist
-        song_name = music.iloc[i[0]].song
-        # Get the album cover URL and song link
-        album_cover_url, song_link = get_song_album_cover_url(song_name, artist)
-        # Append the details to the respective lists
-        recommended_music_posters.append(album_cover_url)
-        recommended_music_names.append(song_name)
-        recommended_music_links.append(song_link)
+    recommended_music_links = []
 
-    return recommended_music_names, recommended_music_posters, recommended_music_links
+    for rec_idx in indices[0][1:]:
+
+        artist = music.iloc[rec_idx].artist
+
+        song_name = music.iloc[rec_idx].song
+
+        album_cover_url, song_link = (
+            get_song_album_cover_url(
+                song_name,
+                artist
+            )
+        )
+
+        recommended_music_names.append(
+            song_name
+        )
+
+        recommended_music_posters.append(
+            album_cover_url
+        )
+
+        recommended_music_links.append(
+            song_link
+        )
+
+    return (
+        recommended_music_names,
+        recommended_music_posters,
+        recommended_music_links
+    )
+
+
+    
 
 
 st.header('Music Recommender System')
-music = pickle.load(open('df.pkl','rb'))
-similarity = pickle.load(open('similarity.pkl','rb'))
+music = pickle.load(
+    open("df.pkl","rb")
+)
+
+faiss_index = faiss.read_index(
+    "songs.faiss"
+)
 
 music_list = music['song'].values
 selected_movie= st.selectbox(
